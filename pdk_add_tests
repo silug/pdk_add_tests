@@ -1,0 +1,97 @@
+#!/bin/bash
+
+set -e
+
+if [ ! -d manifests ] ; then
+    echo 'No manifests directory found.  Exiting.' >&2
+    exit 1
+fi
+
+if [ ! -f metadata.json ] ; then
+    echo 'No metadata.json found.  Exiting.' >&2
+    exit 1
+fi
+
+# Look for an erb executable.
+erb=''
+erb_paths=(
+    $( type -path erb )
+    /opt/puppetlabs/puppet/bin/erb
+    /opt/puppetlabs/pdk/private/ruby/*/bin/erb
+)
+
+for (( n=${#erb_paths[@]} ; n>=0 ; n-- )) ; do
+    if [ -x "${erb_paths[$n]}" ] ; then
+        erb="${erb_paths[$n]}"
+        break
+    fi
+done
+
+if [ -z "$erb" ] ; then
+    echo "Could not find erb executable.  Exiting." >&2
+    exit 1
+fi
+
+template_url="$( jq -r '."template-url"' metadata.json )"
+template_ref="$( jq -r '."template-ref"' metadata.json )"
+
+case $template_url in
+    file:*)
+        template_path=${template_url%#*}
+        template_path=${template_path#file://}
+        class_spec=$( git -C "$template_path" show "$template_ref":object_templates/class_spec.erb )
+        defined_type_spec=$( git -C "$template_path" show "$template_ref":object_templates/defined_type_spec.erb )
+        ;;
+
+    *)
+        template_dir=${template_url##*/}
+        template_dir=${template_dir%.git}
+
+        tmpdir="$( mktemp -d )"
+
+        echo "Fetching templates from $template_url..." >&2
+        pushd "$tmpdir" > /dev/null
+        git clone "$template_url" --quiet
+        pushd "$template_dir" > /dev/null
+        class_spec=$( git show "$template_ref":object_templates/class_spec.erb )
+        defined_type_spec=$( git show "$template_ref":object_templates/defined_type_spec.erb )
+        popd > /dev/null
+        popd > /dev/null
+
+        rm -rf "$tmpdir"
+        ;;
+esac
+
+for manifest in $( find manifests -name '*.pp' ) ; do
+    class="$( sed -e '/^\s*class\s\+[a-z_:][a-z0-9_:]*[[:space:]({]/!d;' \
+                  -e 's/^\s*class\s\+\([a-z_:][a-z0-9_:]*\)[[:space:]({].*/\1/' \
+                  < "$manifest" )"
+    define="$( sed -e '/^\s*define\s\+[a-z_:][a-z0-9_:]*[[:space:]({]/!d;' \
+                   -e 's/^\s*define\s\+\([a-z_:][a-z0-9_:]*\)[[:space:]({].*/\1/' \
+                   < "$manifest" )"
+    if [ -n "$class" ] ; then
+        echo "Found class $class in manifest $manifest." >&2
+        test=${manifest/#manifests/spec\/classes}
+        test=${test/%.pp/_spec.rb}
+        if [ ! -f "$test" ] ; then
+            echo "Creating test in $test." >&2
+            mkdir -pv "${test%/*}"
+            echo "$class_spec" | $erb "name=$class" - > "$test"
+        else
+            echo "Found existing test in $test.  Skipping." >&2
+        fi
+    elif [ -n "$define" ] ; then
+        echo "Found defined type $define in manifest $manifest." >&2
+        test=${manifest/#manifests/spec\/defines}
+        test=${test/%.pp/_spec.rb}
+        if [ ! -f "$test" ] ; then
+            echo "Creating test in $test." >&2
+            mkdir -pv "${test%/*}"
+            echo "$defined_type_spec" | $erb "name=$define" - > "$test"
+        else
+            echo "Found existing test in $test.  Skipping." >&2
+        fi
+    else
+        echo "No classes or defined types found in manifest $manifest." >&2
+    fi
+done
