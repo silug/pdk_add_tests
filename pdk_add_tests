@@ -36,8 +36,11 @@ template_url="$( jq -r '."template-url"' metadata.json )"
 template_ref="$( jq -r '."template-ref"' metadata.json )"
 
 case $template_url in
-    file:*)
+    pdk-default\#*|file:*)
         template_path=${template_url%#*}
+        if [ "$template_path" = "pdk-default" ] ; then
+            template_path=/opt/puppetlabs/pdk/share/cache/pdk-templates.git
+        fi
         template_path=${template_path#file://}
         class_spec=$( git -C "$template_path" show "$template_ref":object_templates/class_spec.erb )
         defined_type_spec=$( git -C "$template_path" show "$template_ref":object_templates/defined_type_spec.erb )
