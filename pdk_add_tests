@@ -123,12 +123,12 @@ if [ $use_erb -gt 0 ] ; then
     esac
 fi
 
-for manifest in $( find manifests -name '*.pp' ) ; do
-    class="$( sed -e '/^\s*class\s\+[a-z_:][a-z0-9_:]*[[:space:]({]/!d;' \
-                  -e 's/^\s*class\s\+\([a-z_:][a-z0-9_:]*\)[[:space:]({].*/\1/' \
+for manifest in $( find manifests -type f -name '*.pp' ) ; do
+    class="$( sed -e '/^[[:space:]]*class[[:space:]][[:space:]]*[a-z_:][a-z0-9_:]*[[:space:]({]/!d;' \
+                  -e 's/^[[:space:]]*class[[:space:]][[:space:]]*\([a-z_:][a-z0-9_:]*\)[[:space:]({].*/\1/' \
                   < "$manifest" )"
-    define="$( sed -e '/^\s*define\s\+[a-z_:][a-z0-9_:]*[[:space:]({]/!d;' \
-                   -e 's/^\s*define\s\+\([a-z_:][a-z0-9_:]*\)[[:space:]({].*/\1/' \
+    define="$( sed -e '/^[[:space:]]*define[[:space:]][[:space:]]*[a-z_:][a-z0-9_:]*[[:space:]({]/!d;' \
+                   -e 's/^[[:space:]]*define[[:space:]][[:space:]]*\([a-z_:][a-z0-9_:]*\)[[:space:]({].*/\1/' \
                    < "$manifest" )"
     if [ -n "$class" ] ; then
         echo "Found class $class in manifest $manifest." >&2
