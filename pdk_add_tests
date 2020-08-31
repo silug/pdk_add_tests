@@ -54,12 +54,17 @@ fi
 
 set -e
 
-if [ $use_erb -gt 0 ] ; then
-    if ! type jq > /dev/null ; then
-        echo "Could not find jq executable.  Exiting." >&2
-        exit 1
-    fi
+if ! type jq > /dev/null ; then
+    echo "Could not find jq executable.  Exiting." >&2
+    exit 1
+fi
 
+if [ "$( jq -r '.["pdk-version"]' metadata.json )" = null ] ; then
+    echo "This does not appear to be a PDK-enabled module.  Run 'pdk convert'?" >&2
+    exit 1
+fi
+
+if [ $use_erb -gt 0 ] ; then
     # Look for an erb executable.
     erb=''
     erb_paths=(
