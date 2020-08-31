@@ -81,7 +81,16 @@ if [ $use_erb -gt 0 ] ; then
     fi
 
     template_url="$( jq -r '."template-url"' metadata.json )"
+    if [ "$template_url" = null ] ; then
+        echo "Failed to resolve 'template-url' from metadata.json.  Run 'pdk convert'?" >&2
+        exit 1
+    fi
+
     template_ref="$( jq -r '."template-ref"' metadata.json )"
+    if [ "$template_ref" = null ] ; then
+        echo "Failed to resolve 'template-ref' from metadata.json.  Run 'pdk convert'?" >&2
+        exit 1
+    fi
 
     case $template_url in
         pdk-default\#*|file:*)
