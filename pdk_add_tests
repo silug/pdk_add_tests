@@ -137,8 +137,14 @@ for manifest in $( find manifests -type f -name '*.pp' ) ; do
                    < "$manifest" )"
     if [ -n "$class" ] ; then
         echo "Found class $class in manifest $manifest." >&2
-        test=${manifest/#manifests/spec\/classes}
-        test=${test/%.pp/_spec.rb}
+        if [[ $class =~ :: ]] ; then
+            test=${manifest/#manifests/spec\/classes}
+            test=${test/%.pp/_spec.rb}
+        else
+            # FIXME - Need to handle init.pp specially
+            # Tests could be named $class_spec.rb or init_spec.rb.
+            test=spec/classes/${class}_spec.rb
+        fi
         if [ ! -f "$test" ] ; then
             echo "Creating test in $test." >&2
             if [ $use_erb -gt 0 ] ; then
