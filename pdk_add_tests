@@ -64,7 +64,7 @@ if [ "$( jq -r '.["pdk-version"]' metadata.json )" = null ] ; then
     exit 1
 fi
 
-if [ $use_erb -gt 0 ] ; then
+configure_erb() {
     # Look for an erb executable.
     erb=''
     erb_paths=(
@@ -106,6 +106,7 @@ if [ $use_erb -gt 0 ] ; then
             template_path=${template_path#file://}
             class_spec=$( git -C "$template_path" show "$template_ref":object_templates/class_spec.erb )
             defined_type_spec=$( git -C "$template_path" show "$template_ref":object_templates/defined_type_spec.erb )
+            fact_spec=$( git -C "$template_path" show "$template_ref":object_templates/fact_spec.erb || : )
             ;;
 
         *)
@@ -120,12 +121,17 @@ if [ $use_erb -gt 0 ] ; then
             pushd "$template_dir" > /dev/null
             class_spec=$( git show "$template_ref":object_templates/class_spec.erb )
             defined_type_spec=$( git show "$template_ref":object_templates/defined_type_spec.erb )
+            fact_spec=$( git show "$template_ref":object_templates/fact_spec.erb || : )
             popd > /dev/null
             popd > /dev/null
 
             rm -rf "$tmpdir"
             ;;
     esac
+}
+
+if [ "$use_erb" -eq 1 ] ; then
+    configure_erb
 fi
 
 for manifest in $( find manifests -type f -name '*.pp' ) ; do
@@ -175,3 +181,34 @@ for manifest in $( find manifests -type f -name '*.pp' ) ; do
         echo "No classes or defined types found in manifest $manifest." >&2
     fi
 done
+
+if [ -d lib/facter ] ; then
+    if [ -z "$erb" ] ; then
+        configure_erb
+    fi
+
+    if [ -n "$fact_spec" ] ; then
+        for fact in $( find lib/facter -type f -name '*.rb' ) ; do
+            # FIXME - For now assume the fact name matches the filename.
+            fact_name="$( basename "$fact" | sed 's/\.rb$//' )"
+            if [ -z "$fact_name" ] ; then
+                echo "Failed to determine fact name for $fact.  Skipping." >&2
+                continue
+            fi
+
+            test=${fact/#lib/spec\/unit}
+            test=${test/%.rb/_spec.rb}
+
+            if [ -f "$test" ] ; then
+                echo "Found existing test in $test.  Skipping." >&2
+                continue
+            fi
+
+            echo "Creating test in $test." >&2
+
+            mkdir -pv "${test%/*}"
+
+            echo "$fact_spec" | $erb "name=$fact_name" - > "$test"
+        done
+    fi
+fi
