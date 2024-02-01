@@ -51,6 +51,7 @@ if [ $? -le 1 ]; then
 else
     use_erb=1
 fi
+use_erb=${USE_ERB:-"$use_erb"}
 
 set -e
 
